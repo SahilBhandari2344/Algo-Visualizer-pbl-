@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OS Algorithm Visualizer</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background-color: #f4f4f4;
+    }
+    h1 {
+      text-align: center;
+    }
+    label, select, input {
+      margin: 5px;
+    }
+    #input-container, #output {
+      margin-top: 20px;
+    }
+    table, th, td {
+      border: 1px solid #000;
+      border-collapse: collapse;
+      padding: 8px;
+      text-align: center;
+    }
+    .gantt-chart {
+      display: flex;
+      margin-top: 20px;
+    }
+    .gantt-block {
+      padding: 10px;
+      margin: 2px;
+      background-color: #2196f3;
+      color: white;
+      border-radius: 5px;
+      position: relative;
+      animation: fadeIn 1s ease-in-out;
+    }
+    .gantt-block span {
+      position: absolute;
+      bottom: -20px;
+      font-size: 12px;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+  <h1>OS Algorithm Visualizer - Non-Preemptive</h1>
+  <div id="input-container">
+    <label for="algo">Select Algorithm:</label>
+    <select id="algo">
+      <option value="fcfs">FCFS</option>
+      <option value="sjf">SJF</option>
+      <option value="ljf">LJF</option>
+      <option value="priority">Priority</option>
+    </select><br>
+    <label>Number of Processes:</label>
+    <input type="number" id="num" min="1" max="10">
+    <button onclick="createInputFields()">Enter</button>
+    <div id="process-inputs"></div>
+    <button onclick="runScheduling()">Run</button>
+  </div>
+
+  <div id="output">
+    <h2>Gantt Chart</h2>
+    <div class="gantt-chart" id="gantt"></div>
+
+    <h2>Process Table</h2>
+    <table id="result-table">
+      <thead>
+        <tr>
+          <th>Process</th>
+          <th>Arrival Time</th>
+          <th>Burst Time</th>
+          <th>Completion Time</th>
+          <th>Turnaround Time</th>
+          <th>Waiting Time</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <p id="throughput"></p>
+  </div>
+
+  <script>
+    function createInputFields() {
+      const num = document.getElementById('num').value;
+      const container = document.getElementById('process-inputs');
+      container.innerHTML = '';
+      for (let i = 0; i < num; i++) {
+        container.innerHTML += `
+          <h4>Process P${i + 1}</h4>
+          Arrival Time: <input type="number" id="at${i}" required>
+          Burst Time: <input type="number" id="bt${i}" required>
+          Priority: <input type="number" id="pt${i}" required><br>
+        `;
+      }
+    }
+
+    async function runScheduling() {
+      const num = document.getElementById('num').value;
+      let algo = document.getElementById('algo').value;
+      let processes = [];
+
+      for (let i = 0; i < num; i++) {
+        processes.push({
+          id: 'P' + (i + 1),
+          arrivalTime: parseInt(document.getElementById('at' + i).value),
+          burstTime: parseInt(document.getElementById('bt' + i).value),
+          priority: parseInt(document.getElementById('pt' + i).value)
+        });
+      }
+
+      processes.sort((a, b) => a.arrivalTime - b.arrivalTime);
+      let time = 0, completed = 0;
+      let gantt = [], result = [];
+
+      while (completed < processes.length) {
+        let available = processes.filter(p => p.arrivalTime <= time && !p.done);
+
+        if (available.length === 0) {
+          time++;
+          continue;
+        }
+
+        let next;
+        if (algo === 'fcfs') {
+          next = available[0];
+        } else if (algo === 'sjf') {
+          next = available.reduce((a, b) => a.burstTime < b.burstTime ? a : b);
+        } else if (algo === 'ljf') {
+          next = available.reduce((a, b) => a.burstTime > b.burstTime ? a : b);
+        } else if (algo === 'priority') {
+          next = available.reduce((a, b) => a.priority < b.priority ? a : b);
+        }
+
+        let start = time;
+        let end = start + next.burstTime;
+
+        gantt.push({ id: next.id, start, end });
+
+        result.push({
+          id: next.id,
+          arrivalTime: next.arrivalTime,
+          burstTime: next.burstTime,
+          completionTime: end,
+          turnaroundTime: end - next.arrivalTime,
+          waitingTime: start - next.arrivalTime
+        });
+
+        next.done = true;
+        time = end;
+        completed++;
+      }
+
+      document.getElementById('gantt').innerHTML = '';
+      for (let block of gantt) {
+        await new Promise(res => setTimeout(res, 1000));
+        const div = document.createElement('div');
+        div.className = 'gantt-block';
+        div.style.width = (block.end - block.start) * 40 + 'px';
+        div.innerHTML = `${block.id}<span>${block.start}</span><span style="right:0">${block.end}</span>`;
+        document.getElementById('gantt').appendChild(div);
+      }
+
+      const tbody = document.querySelector('#result-table tbody');
+      tbody.innerHTML = '';
+      result.forEach(p => {
+        const row = `<tr>
+          <td>${p.id}</td>
+          <td>${p.arrivalTime}</td>
+          <td>${p.burstTime}</td>
+          <td>${p.completionTime}</td>
+          <td>${p.turnaroundTime}</td>
+          <td>${p.waitingTime}</td>
+        </tr>`;
+        tbody.innerHTML += row;
+      });
+
+      const totalTime = Math.max(...result.map(p => p.completionTime));
+      const throughput = result.length / totalTime;
+      document.getElementById('throughput').innerText = `Throughput: ${throughput.toFixed(2)} processes/unit time`;
+    }
+  </script>
+</body>
+</html>
